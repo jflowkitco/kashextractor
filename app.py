@@ -1,47 +1,63 @@
 import streamlit as st
-import openai
 import PyPDF2
-from io import BytesIO
+import openai
+import os
 
-st.set_page_config(page_title="KITKASH Invoice Extractor", layout="centered")
+# Set the page config
+st.set_page_config(
+    page_title="KITKASH Invoice Extractor",
+    page_icon="📄",
+    layout="centered",
+)
 
-st.title("📄 KASH Invoice Extractor (Fine-tuned GPT)")
-st.caption("Upload an invoice PDF")
+# App title
+st.title("📄 KITKASH Invoice Extractor (Fine-tuned GPT)")
 
-uploaded_file = st.file_uploader("Upload an insurance PDF", type=["pdf"])
+# File uploader
+uploaded_file = st.file_uploader("Upload an insurance PDF", type="pdf")
 
-if uploaded_file:
+if uploaded_file is not None:
+    st.success(f"Uploaded file: {uploaded_file.name}")
     pdf_reader = PyPDF2.PdfReader(uploaded_file)
-    raw_text = "\n".join(
-        [page.extract_text() for page in pdf_reader.pages if page and page.extract_text()]
-    )
 
-    st.subheader("📄 Raw Extracted Text")
-    with st.expander("Text from PDF", expanded=False):
-        st.code(raw_text)
+    # Extract raw text
+    raw_text = ""
+    for page in pdf_reader.pages:
+        extracted = page.extract_text()
+        if extracted:
+            raw_text += extracted + "\n"
 
+    # Show raw text
+    with st.expander("📝 Raw Extracted Text", expanded=True):
+        st.text_area("Text from PDF", raw_text, height=400)
+
+    # Button to run fine-tuned model
     if st.button("🔍 Extract Info Using Fine-tuned Model"):
-        with st.spinner("Calling fine-tuned GPT model..."):
-            openai.api_key = st.secrets["OPENAI_API_KEY"]
+        with st.spinner("Extracting data using fine-tuned GPT model..."):
             try:
+                openai.api_key = st.secrets["OPENAI_API_KEY"]
+
                 response = openai.chat.completions.create(
                     model="ft:gpt-3.5-turbo-0125:kash:kash-final:BOtVnn7m",
                     messages=[
                         {
                             "role": "system",
-                            "content": "Extract the following fields from the invoice text: "
-                                       "Insurance Company Name, General Agent, Broker, Policy Number, "
-                                       "Coverage Type, Pure Premium, Minimum Earned Premium %, "
-                                       "Cancellation Terms in Days, Effective Date, Expiration Date, "
-                                       "Policy Fees, Taxes, Broker Fee, Inspection Fee, "
-                                       "Payment Mail Address, Electronic Payment Link, ACH/Wire Instructions."
+                            "content": "You are a data extraction bot that pulls structured values from invoice and insurance documents."
                         },
-                        {"role": "user", "content": raw_text}
+                        {
+                            "role": "user",
+                            "content": raw_text
+                        }
                     ],
-                    temperature=0.3
+                    temperature=0.2
                 )
-                extracted = response.choices[0].message.content
+
+                extracted_data = response.choices[0].message.content
+                st.success("✅ Extraction Complete")
                 st.subheader("📊 Extracted Data")
-                st.code(extracted)
+                st.code(extracted_data, language="json")
+
             except Exception as e:
-                st.error(f"❌ Failed to extract: {e}")
+                st.error(f"⚠️ Error extracting data: {e}")
+else:
+    st.info("Please upload a PDF to begin.")
