@@ -3,7 +3,7 @@ import openai
 import PyPDF2
 from io import BytesIO
 
-st.set_page_config(page_title="KASH Invoice Extractor (Fine-tuned GPT)", layout="centered")
+st.set_page_config(page_title="KITKASH Invoice Extractor", layout="centered")
 
 st.title("📄 KASH Invoice Extractor (Fine-tuned GPT)")
 st.caption("Upload an invoice PDF")
