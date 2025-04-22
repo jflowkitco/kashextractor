@@ -1,63 +1,70 @@
 import streamlit as st
 import PyPDF2
-import openai
 import os
+import openai
+from io import BytesIO
 
-# Set the page config
-st.set_page_config(
-    page_title="KITKASH Invoice Extractor",
-    page_icon="📄",
-    layout="centered",
-)
+# Use OpenAI's v1 SDK
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# App title
-st.title("📄 KITKASH Invoice Extractor (Fine-tuned GPT)")
+st.set_page_config(page_title="KITKASH Invoice Extractor", layout="centered")
 
-# File uploader
-uploaded_file = st.file_uploader("Upload an insurance PDF", type="pdf")
+# Display logo and title
+st.image("kitkash_logo.png", width=200)
+st.title("KITKASH Invoice Extractor")
+st.caption("Upload an invoice or insurance policy PDF to extract finance data.")
+
+uploaded_file = st.file_uploader("📎 Upload a PDF file", type="pdf")
 
 if uploaded_file is not None:
-    st.success(f"Uploaded file: {uploaded_file.name}")
-    pdf_reader = PyPDF2.PdfReader(uploaded_file)
+    with st.spinner("🔍 Extracting text from PDF..."):
+        reader = PyPDF2.PdfReader(uploaded_file)
+        extracted_text = ""
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text + "\n"
 
-    # Extract raw text
-    raw_text = ""
-    for page in pdf_reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            raw_text += extracted + "\n"
+    st.success("✅ Text extracted from PDF!")
 
-    # Show raw text
-    with st.expander("📝 Raw Extracted Text", expanded=True):
-        st.text_area("Text from PDF", raw_text, height=400)
+    with st.expander("📄 View Extracted Text"):
+        st.text_area("Raw Text", extracted_text, height=300)
 
-    # Button to run fine-tuned model
-    if st.button("🔍 Extract Info Using Fine-tuned Model"):
-        with st.spinner("Extracting data using fine-tuned GPT model..."):
-            try:
-                openai.api_key = st.secrets["OPENAI_API_KEY"]
+    if st.button("🚀 Extract Invoice Data"):
+        with st.spinner("🧠 Asking fine-tuned GPT model..."):
+            prompt = f"""
+You are a data extraction bot trained to pull specific values from insurance-related invoices and policies.
 
-                response = openai.chat.completions.create(
-                    model="ft:gpt-3.5-turbo-0125:kash:kash-final:BOtVnn7m",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a data extraction bot that pulls structured values from invoice and insurance documents."
-                        },
-                        {
-                            "role": "user",
-                            "content": raw_text
-                        }
-                    ],
-                    temperature=0.2
-                )
+Extract the following fields from the raw PDF text below:
+- Insurance Company Name
+- General Agent
+- Broker
+- Policy Number
+- Coverage Type
+- Pure Premium
+- Minimum Earned Premium %
+- Cancellation Terms in Days
+- Effective Date
+- Expiration Date (if not listed, infer 12 months after effective date and label as 'inferred')
+- Policy Fees
+- Taxes
+- Broker Fee
+- Inspection Fee
+- Payment Mailing Address
+- Electronic Payment Link
+- ACH/Wire Instructions
 
-                extracted_data = response.choices[0].message.content
-                st.success("✅ Extraction Complete")
-                st.subheader("📊 Extracted Data")
-                st.code(extracted_data, language="json")
+Respond only with structured data in JSON format.
 
-            except Exception as e:
-                st.error(f"⚠️ Error extracting data: {e}")
-else:
-    st.info("Please upload a PDF to begin.")
+RAW TEXT:
+{extracted_text}
+"""
+
+            response = client.chat.completions.create(
+                model="ft:gpt-3.5-turbo-0125:kash:kash-final:BOtVnn7m",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+            )
+            extracted_json = response.choices[0].message.content.strip()
+            st.success("✅ Data extracted successfully!")
+            st.code(extracted_json, language="json")
